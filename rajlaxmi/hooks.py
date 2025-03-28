@@ -137,7 +137,11 @@ app_license = "mit"
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
+doc_events = {
+    "Employee Checkin": {
+        "validate": "rajlaxmi.rajlaxmi.employee_checking.employee_checkin.validate_checkin"
+    }
+}
 # 	"*": {
 # 		"on_update": "method",
 # 		"on_cancel": "method",
