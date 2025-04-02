@@ -3,7 +3,7 @@ from frappe import _
 from frappe.utils import get_time
 from frappe.utils import now_datetime
 from frappe.utils import get_datetime
-from frappe.utils import time_diff_in_hours
+from frappe.utils import time_diff_in_hours, flt
 
 def validate_checkin(doc, method):
     check_employee_checkin_time(doc, method)
@@ -122,3 +122,36 @@ def handle_missing_checkout(doc, method):
             attendance.submit()
 
     frappe.flags.auto_checkout = False
+
+
+def calculate_fractional_leave_deduction(employee, payroll_period):
+    total_deduction = 0.0
+
+    leave_applications = frappe.get_all("Leave Application",
+        filters={
+            "employee": employee,
+            "status": "Approved",
+            "from_date": [">=", payroll_period.start_date],
+            "to_date": ["<=", payroll_period.end_date],
+        },
+        fields=["leave_type", "total_leave_days"]
+    )
+
+    for leave in leave_applications:
+        leave_policy = frappe.get_value("Leave Type", leave.leave_type, "is_paid_leave")
+
+        if not leave_policy:
+            daily_wage = frappe.get_value("Employee", employee, "per_day_salary") or 0
+            total_deduction += flt(leave.total_leave_days) * daily_wage
+
+    return total_deduction
+
+def update_salary_slip(doc, method):
+    if doc.salary_slip_based_on_timesheet:
+        return
+
+    leave_deduction = calculate_fractional_leave_deduction(doc.employee, doc.payroll_period)
+    
+    if leave_deduction > 0:
+        doc.total_deductions += leave_deduction
+        doc.net_pay = max(0, doc.gross_pay - doc.total_deductions)
